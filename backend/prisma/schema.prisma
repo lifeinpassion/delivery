@@ -1,0 +1,233 @@
+// Prisma Schema for Botswana Courier Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  CUSTOMER
+  DRIVER
+}
+
+enum OrderStatus {
+  PENDING
+  ASSIGNED
+  PICKED_UP
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+enum DriverStatus {
+  OFFLINE
+  AVAILABLE
+  BUSY
+}
+
+enum VehicleType {
+  MOTORCYCLE
+  CAR
+  VAN
+  TRUCK
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  phone         String    @unique
+  password      String
+  firstName     String
+  lastName      String
+  role          UserRole  @default(CUSTOMER)
+  isActive      Boolean   @default(true)
+  emailVerified Boolean   @default(false)
+  phoneVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  customer      Customer?
+  driver        Driver?
+
+  @@index([email])
+  @@index([phone])
+}
+
+model Customer {
+  id                String    @id @default(uuid())
+  userId            String    @unique
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Addresses
+  addresses         Address[]
+
+  // Orders
+  ordersAsCustomer  Order[]   @relation("CustomerOrders")
+
+  // Preferences
+  defaultAddressId  String?
+  notificationPreferences Json?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model Driver {
+  id                String        @id @default(uuid())
+  userId            String        @unique
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Driver Details
+  licenseNumber     String        @unique
+  vehicleType       VehicleType
+  vehicleModel      String?
+  vehiclePlate      String?
+  vehicleColor      String?
+  status            DriverStatus  @default(OFFLINE)
+
+  // Location
+  currentLatitude   Float?
+  currentLongitude  Float?
+  lastLocationUpdate DateTime?
+
+  // Ratings
+  rating            Float         @default(0)
+  totalDeliveries   Int           @default(0)
+
+  // Documents
+  documents         Json?         // Store document URLs (license, insurance, etc.)
+
+  // Orders
+  orders            Order[]
+
+  // Availability
+  isAvailable       Boolean       @default(true)
+  workingHours      Json?         // Store working hours schedule
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([status])
+  @@index([currentLatitude, currentLongitude])
+}
+
+model Address {
+  id              String    @id @default(uuid())
+  customerId      String
+  customer        Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  label           String?   // e.g., "Home", "Office"
+  street          String
+  city            String
+  state           String?
+  country         String    @default("Botswana")
+  postalCode      String?
+  latitude        Float
+  longitude       Float
+
+  // Contact at address
+  contactName     String?
+  contactPhone    String?
+
+  isDefault       Boolean   @default(false)
+
+  // Orders from this address
+  ordersAsPickup  Order[]   @relation("PickupAddress")
+  ordersAsDropoff Order[]   @relation("DropoffAddress")
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([customerId])
+}
+
+model Order {
+  id              String        @id @default(uuid())
+  orderNumber     String        @unique
+
+  // Customer
+  customerId      String
+  customer        Customer      @relation("CustomerOrders", fields: [customerId], references: [id])
+
+  // Driver
+  driverId        String?
+  driver          Driver?       @relation(fields: [driverId], references: [id])
+
+  // Addresses
+  pickupAddressId String
+  pickupAddress   Address       @relation("PickupAddress", fields: [pickupAddressId], references: [id])
+
+  dropoffAddressId String
+  dropoffAddress  Address       @relation("DropoffAddress", fields: [dropoffAddressId], references: [id])
+
+  // Order Details
+  status          OrderStatus   @default(PENDING)
+  packageDescription String?
+  packageWeight   Float?        // in kg
+  specialInstructions String?
+
+  // Pricing
+  estimatedPrice  Float
+  finalPrice      Float?
+  distance        Float?        // in km
+
+  // Timestamps
+  scheduledPickupTime DateTime?
+  actualPickupTime    DateTime?
+  estimatedDeliveryTime DateTime?
+  actualDeliveryTime  DateTime?
+
+  // Tracking
+  trackingEvents  TrackingEvent[]
+
+  // Proof of Delivery
+  proofOfDelivery Json?         // signature URL, photo URL, recipient name
+
+  // Ratings
+  customerRating  Float?
+  driverRating    Float?
+  customerReview  String?
+
+  // SMS Notifications
+  smsNotificationsSent Json?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([customerId])
+  @@index([driverId])
+  @@index([status])
+  @@index([orderNumber])
+  @@index([createdAt])
+}
+
+model TrackingEvent {
+  id          String    @id @default(uuid())
+  orderId     String
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  status      OrderStatus
+  description String?
+  latitude    Float?
+  longitude   Float?
+
+  createdAt   DateTime  @default(now())
+
+  @@index([orderId])
+  @@index([createdAt])
+}
+
+model Setting {
+  id          String    @id @default(uuid())
+  key         String    @unique
+  value       String
+  description String?
+
+  updatedAt   DateTime  @updatedAt
+}
