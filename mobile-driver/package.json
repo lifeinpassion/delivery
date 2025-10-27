@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "expo/AppEntry.js",
   "scripts": {
-    "start": "expo start",
+    "start": "ulimit -n 65536 2>/dev/null || true && expo start",
+    "start:clear": "ulimit -n 65536 2>/dev/null || true && expo start --clear",
+    "start:tunnel": "ulimit -n 65536 2>/dev/null || true && expo start --tunnel",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web"
